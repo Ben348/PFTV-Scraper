@@ -390,6 +390,73 @@ class pftv
     }
 
     /**
+     * Get the direct video link from a PFTV video url
+     * @param   string      $pftv_link      PFTV video url
+     * @access  public
+     * @return  string|ErrorException       URL of video or error if an error occurred
+     */
+    public function get_direct_link($pftv_link)
+    {
+        try
+        {
+            // Create a new DOMDocument
+            $dom = new DOMDocument('1.0', 'iso-8859-1');
+
+            // Load the website source to the document
+            $dom->loadHTMLFile($pftv_link);
+
+            // Create a new DOMXpath object
+            $xpath = new DOMXpath($dom);
+
+            // Define our episodes and links array
+            $direct_link = null;
+
+            // Get the embedded url of the video
+            if($embedded_url = $xpath->evaluate('string(//*[@id="vvdiv"]/iframe/@src)'))
+            {
+                // Check we have a valid host name
+                if($host_name = $this->get_url_host($embedded_url))
+                {
+                    // Host parser class file location
+                    $host_file_path = dirname(__FILE__).'/hosts/'.$host_name.'.php';
+
+                    // Host parser class name
+                    $host_parser_class = str_replace('.', '_', $host_name);
+
+                    // Load the host parser class
+                    if(file_exists($host_file_path) && !class_exists($host_parser_class))
+                        require_once($host_file_path);
+
+                    // Get the direct link. Throws an error if there is a problem with the parser class
+                    if(method_exists($host_parser_class, 'get_link')):
+                        return $host_parser_class::get_link($embedded_url);
+                    else:
+                        throw new Exception('Could not get the direct link. Check the "'.$host_name.'" parser', 1);
+                    endif;                     
+                }
+                else
+                {
+                    // Couldn't get the host name from the url so throw an error
+                    throw new Exception('Could not extract the host name from the URL', 1);
+                }
+            }
+            else
+            {
+                // Couldn't find the embedded url (probably won't ever be the case because of the way the site works but just incase)
+                throw new Exception('Could not find the embedded url for the video "'.$pftv_link.'"', 1);
+            }
+        }
+        catch(Exception $e)
+        {
+            // Call custom error handler function
+            $this->handle_error($e);
+
+            // Return the error object
+            return $e;
+        }        
+    }
+
+    /**
      * Convert a string to a date object
      * @param   string      $str     String to convert
      * @return  string|null     Formatted date string or null if failed
