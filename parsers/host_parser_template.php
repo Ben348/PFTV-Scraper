@@ -15,12 +15,12 @@
  */
 class example_com extends host_parser
 {
-	/**
+    /**
 	 * Extract the link from example.com
 	 * @param 	string 		$embedded_url 	The embedded url that was on the PFTV website
 	 * @return 	string|null 	Direct link of the video or null
 	 */
-	public static function get_link($embedded_url)
+    public static function get_link($embedded_url)
     {
         // Get the source
         $html_source = file_get_contents($embedded_url);
