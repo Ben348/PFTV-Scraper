@@ -149,9 +149,8 @@ class pftv
                 $category_id = ($tmp = $xpath->evaluate('string(.//a/@href)', $node)) ? $tmp : null;
 
                 // 5.3 Category data (Links & episode counters)
-                if(($category_data = $xpath->evaluate('string(text())', $node))):
+                if(($category_data = $xpath->evaluate('string(text())', $node)))
                     preg_match('/(?P<episodes>\d+).*\s(?P<links>\d+)/i', $category_data, $matches);
-                endif;
 
                 // Add to category array
                 $categories[] = array(
@@ -207,6 +206,178 @@ class pftv
                 'next_episode'  => $next_episode,
                 'categories'    => $categories
             );
+        }
+        catch(Exception $e)
+        {
+            // Call custom error handler function
+            $this->handle_error($e);
+
+            // Return the error object
+            return $e;
+        }
+    }
+
+    /**
+     * Get a list of categories / seasons for a TV show
+     * @param   string      $show_id        TV show id
+     * @param   string      $category_id    TV show category id
+     * @access  public
+     * @return  array|ErrorException    Array of data or error if an error occurred
+     */
+    public function get_episode_list($show_id, $category_id)
+    {
+        try
+        {
+            // Build the website URL
+            $url = $this->base_url.'/'.$this->tv_url.'/'.$show_id.'/'.$category_id;
+
+            // Create a new DOMDocument
+            $dom = new DOMDocument('1.0', 'iso-8859-1');
+
+            // Load the website source to the document
+            $dom->loadHTMLFile($url);
+
+            // Create a new DOMXpath object
+            $xpath = new DOMXpath($dom);
+
+            // Define our episodes and links array
+            $episodes = $links = array();
+
+            // Array of all our XPath expressions
+            $expressions = (object) array(
+                'show_name'         => 'string(//td[@class="mnlbreadcrumbs"]/a/text())',
+                'show_category'     => 'string(//td[@class="mnlbreadcrumbs"]/text())',
+                'ep_count'          => 'count(//tr[td[@class="episode"]])',
+                'ep_name_n_num'     => 'normalize-space(//tr[td[@class="episode"]][%s]/td/b/text())',
+                'ep_code_n_air'     => 'normalize-space(//tr[td[@class="episode"]][%s]/td[2]/div/text())',
+                'ep_description'    => 'normalize-space(//tr[td[@class="episode"]][%s]/following-sibling::tr/td/text())',
+                'ep_links_last'     => '//tr[td[@class="episode"]][%s]/following-sibling::tr[td[contains(@class, "mnllinklist")]]',
+                'ep_links_between'  => '//tr[td[@class="episode"]][%1$s]
+                                                     /following-sibling::tr
+                                          [count(.|//tr[td[@class="episode"]][%1$s]
+                                                        /following-sibling::tr[td[@class="episode"]][1]
+                                                           /preceding-sibling::tr[td[contains(@class, "mnllinklist")]])
+                                          =
+                                           count(//tr[td[@class="episode"]][%1$s]
+                                                        /following-sibling::tr[td[@class="episode"]][1]
+                                                            /preceding-sibling::tr[td[contains(@class, "mnllinklist")]])
+                                          ]',
+                'link_url'          => 'string(.//td[1]/a/@href)',
+                'link_name'         => 'normalize-space(.//td[1]/a/div/text())',
+                'link_host_info'    => 'normalize-space(.//td[1]/a/span)',
+                'link_working_per' => 'normalize-space(.//td[@class="report"]/text())'
+            );
+            
+            // 1. Get show name
+            $show_name = ($n = $xpath->evaluate($expressions->show_name)) ? trim($n) : null;
+
+            // 2. Get show category
+            $show_category = ($c = $xpath->evaluate($expressions->show_category)) ? str_replace(' >> ', '', $c) : null;
+
+            // 3. Count how many episodes there are
+            $episode_count = $xpath->evaluate($expressions->ep_count);
+
+            // 4. Loop through each episode and extract data for that
+            for ($i = 1; $i < $episode_count + 1; $i++)
+            {
+                // Reset links array
+                $links = array();
+
+                // 4.1 Get the episode name & number
+                $ep_name_nodes = $xpath->evaluate(sprintf($expressions->ep_name_n_num, $i));
+
+                // PFTV have various different HTML formats so we have to try a couple of regex expressions
+                if(!preg_match('/(?P<number>\d+).\s(?P<name>.*)/i', $ep_name_nodes, $ep_name_num))
+                {
+                    // First pattern didn't work, let's try another!
+                    if(preg_match('/Episode.*?(?P<number>\d+)/', $ep_name_nodes, $tmp))
+                    {
+                        // Set manualy so the end variable is the same no matter what
+                        $ep_name_num['name'] = $ep_name_nodes;
+                        $ep_name_num['number'] = isset($tmp['number']) ? $tmp['number'] : null;
+                    }
+                    else
+                    {
+                        // We couldn't match anything so default values
+                        $ep_name_num['number'] = null;
+                        $ep_name_num['name'] = $ep_name_nodes;
+                    }
+                }
+
+                // 4.2 Get the episode code (e.g S01E01) and air date
+                $ep_code_air = $xpath->evaluate(sprintf($expressions->ep_code_n_air, $i));
+
+                // Match the date and code in the string
+                preg_match('/(?P<code>[a-zA-Z0-9]+)(.*:.(?P<date>\d.*))?/i', $ep_code_air, $ep_code_air);
+
+                // 4.3 Get the episode description
+                $ep_description = $xpath->evaluate(sprintf($expressions->ep_description, $i)); 
+
+                // 4.4 Get the episode links (We use two expressions here to do so)
+                if($episode_count == $i)
+                {
+                    // This is the last episode in the list so we need a different expression to get the links
+                    $node_list = $xpath->query(sprintf($expressions->ep_links_last, $i));
+                }
+                else
+                {
+                    /*
+                        Get a list of links between episode x and y
+                        NOTE: To exclude episode description use: /preceding-sibling::tr[td[@class='mnllinklist']]) 
+                        or /preceding-sibling::tr[not(@class='none')])
+                        @see $expression->ep_links_between
+                    */
+                    $node_list = $xpath->query(sprintf($expressions->ep_links_between, $i));
+                }
+
+                // Loop through each link and grab the info we need
+                foreach ($node_list as $node)
+                {
+                    // Link URL
+                    $link_url = $xpath->evaluate($expressions->link_url, $node);
+
+                    // Link name
+                    $link_name = $xpath->evaluate($expressions->link_name, $node);
+
+                    // Host information
+                    $host_info = $xpath->evaluate($expressions->link_host_info, $node);
+                    preg_match('/:\s(?P<loading>.*)\s.*\s(?P<host>.*)\s.*:\s(?P<submitted>.*)/i', $host_info, $host_info);
+
+                    // Rated working percentage
+                    $working = $xpath->evaluate($expressions->link_working_per, $node);
+                    preg_match('/(?P<percentage>\d+)%/i', $working, $working);
+
+                    // Add to links array
+                    $links[] = array(
+                        'url'           => $link_url ? $link_url : null,
+                        'name'          => $link_name ? $link_name : null,
+                        'host'          => isset($host_info['host']) ? $host_info['host'] : null,
+                        'loading_time'  => isset($host_info['loading']) ? $host_info['loading'] : null,
+                        'working'       => isset($working['percentage']) ? (float) $working['percentage'] : null
+                    );
+                }
+
+                // Check if we have an episode name and number (Min requirements for episode)
+                if(isset($ep_name_num['name']) && $ep_name_num['number'])
+                {
+                    // Add to episodes array
+                    $episodes[] = array(
+                        'number'        => (float) $ep_name_num['number'],
+                        'name'          => $ep_name_num['name'],
+                        'code'          => isset($ep_code_air['code']) ? $ep_code_air['code'] : null,
+                        'air_date'      => isset($ep_code_air['date']) ? $this->format_date($ep_code_air['date']) : null,
+                        'description'   => $ep_description ? $ep_description : null,
+                        'links'         => $links
+                    );
+                }
+            }
+
+            // Check we have data to return, if not they probably got the wrong IDs
+            if(count($episodes) < 1 && $show_name == null && $show_category == null)
+                throw new Exception('The TV show with the id "'.$show_id.'" and category id "'.$category_id.'" was not found.', 1);
+
+            // Return the episodes list
+            return array('name' => $show_name, 'category' => $show_category, 'episodes' => $episodes);
         }
         catch(Exception $e)
         {

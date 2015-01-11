@@ -21,8 +21,15 @@ require_once('../pftv.php');
 // Make a new instance with our date format
 $pftv = new PFTV('d M Y');
 
-// Request a list of TV shows
-$info = $pftv->get_tv_info('the_big_bang_theory');
+// TV show id
+$show_id = 'the_big_bang_theory';
+$category_id = 'season_1.html';
 
-var_dump($info);
+// Request information for the tv show
+#$info = $pftv->get_tv_info($show_id);
+#var_dump($info);
+
+// Request an episode list for season 1 of the tv show
+$episodes = $pftv->get_episode_list($show_id, $category_id);
+var_dump($episodes);
 
