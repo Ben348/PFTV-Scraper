@@ -56,12 +56,15 @@ class pftv
         require_once('host_parser.php');
 
         // Setup custom error handler
-        set_error_handler(
-            create_function(
-                '$severity, $message, $file, $line',
-                'throw new ErrorException($message, $severity, $severity, $file, $line);'
-            )
-        );
+        if($custom_errors)
+        {
+            set_error_handler(
+                create_function(
+                    '$severity, $message, $file, $line',
+                    'throw new ErrorException($message, $severity, $severity, $file, $line);'
+                )
+            );
+        }
     }
 
     /**
@@ -390,6 +393,30 @@ class pftv
     }
 
     /**
+     * Get the root host name from a url (removes any subdomains)
+     * @param   string  $url    URL to get the host from
+     * @access  private
+     * @link    http://stackoverflow.com/a/1201210  Thanks to Jonathan Sampson on stackoverflow
+     * @return  string|null     The host name if successful or null if it failed
+     */
+    private function get_url_host($url)
+    {
+        // Parse the url
+        $pieces = parse_url($url);
+
+        // Get the host name (This will include any subdomains)
+        $domain = isset($pieces['host']) ? $pieces['host'] : '';
+
+        // Match and return the host
+        if (preg_match('/(?P<domain>[a-z0-9][a-z0-9\-]{1,63}\.[a-z\.]{2,6})$/i', $domain, $match)) {
+            return $match['domain'];
+        }
+
+        // Return null if failed
+        return null;
+    }
+
+    /**
      * Get the direct video link from a PFTV video url
      * @param   string      $pftv_link      PFTV video url
      * @access  public
@@ -418,7 +445,7 @@ class pftv
                 if($host_name = $this->get_url_host($embedded_url))
                 {
                     // Host parser class file location
-                    $host_file_path = dirname(__FILE__).'/hosts/'.$host_name.'.php';
+                    $host_file_path = dirname(__FILE__).'/parsers/'.$host_name.'.php';
 
                     // Host parser class name
                     $host_parser_class = str_replace('.', '_', $host_name);

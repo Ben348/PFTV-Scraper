@@ -26,10 +26,6 @@ $show_id = 'the_big_bang_theory';
 $category_id = 'season_1.html';
 
 // Request information for the tv show
-#$info = $pftv->get_tv_info($show_id);
-#var_dump($info);
-
-// Request an episode list for season 1 of the tv show
-$episodes = $pftv->get_episode_list($show_id, $category_id);
-var_dump($episodes);
+$info = json_decode(json_encode($pftv->get_tv_info($show_id)));
+var_dump($info);
 
