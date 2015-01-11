@@ -78,6 +78,31 @@ class pftv
     }
 
     /**
+     * Convert a string to a date object
+     * @param   string      $str     String to convert
+     * @return  string|null     Formatted date string or null if failed
+     */
+    private function format_date($str)
+    {
+        try
+        {
+            // Try to create a new date
+            $date = new DateTime($str);
+
+            // Return formatted date
+            return $date->format($this->date_format);
+        }
+        catch(Exception $e)
+        {
+            // Call custom error handler function
+            $this->handle_error($e);
+
+            // Return null
+            return null;
+        }
+    }
+
+    /**
      * Handle error when they are caught in the try/catch block
      * can do custom stuff here.
      * @param   ErrorException  $exception  ErrorException object
