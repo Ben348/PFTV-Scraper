@@ -76,4 +76,25 @@ class pftv
         // Restore to previous error handling function
         restore_error_handler();
     }
+
+    /**
+     * Handle error when they are caught in the try/catch block
+     * can do custom stuff here.
+     * @param   ErrorException  $exception  ErrorException object
+     * @return  string      response
+     */
+    private function handle_error($exception)
+    {
+        try
+        {
+            // Output xdebug message
+            echo "C:<br>";
+            echo "<font size='1'><table class='xdebug-error xe-fatal-error' dir='ltr' border='1' cellspacing='0' cellpadding='1'>".$exception->xdebug_message."</table></font>";
+        }
+        catch(Exception $e)
+        {
+            // Return original error object
+            return $exception;
+        }
+    }
 }
